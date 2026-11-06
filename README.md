@@ -68,7 +68,7 @@ Query parameters for `/regis`:
 | Param | Default | Description |
 | --- | --- | --- |
 | `name` | `warp-regis` | Device name. Applied server-side for `masque`; informational for `wireguard`. |
-| `ttl` | `86400` | Cache lifetime in seconds, clamped to `60`–`604800`. |
+| `ttl` | `DEVICE_TTL` or `86400` | Cache lifetime in seconds, clamped to `60`–`604800`. |
 | `mode` | `masque` | `masque` or `wg` (alias `wireguard`). |
 | `format` | `json` | `json`, `raw` (upstream responses only) or `conf` (wg-quick, WireGuard only). |
 
@@ -84,15 +84,24 @@ curl https://<your-worker>.workers.dev/device?format=raw        # upstream respo
 curl https://<your-worker>.workers.dev/device?format=conf
 ```
 
-## Access control
+## Configuration
 
-Set `REGIS_KEY` and `/regis` and `/device` stop answering without it:
+Both settings are optional; the Worker is fully functional with neither.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `REGIS_KEY` | unset (open) | Shared secret for `/regis`, `/device` and `/device/{id}`. |
+| `DEVICE_TTL` | `86400` | Default cache lifetime in seconds, clamped to `60`–`604800`. `?ttl=` wins per request. |
 
 ```bash
-npx wrangler secret put REGIS_KEY     # or [vars] REGIS_KEY = "..." in wrangler.toml
+npx wrangler secret put REGIS_KEY                        # sensitive
+npx wrangler deploy --var DEVICE_TTL:604800              # or [vars] in wrangler.toml
 ```
 
-Then pass it as `?key=` or as a bearer token:
+### Key auth
+
+Set `REGIS_KEY` and `/regis` and `/device` stop answering without it. Pass it as `?key=` or as a
+bearer token:
 
 ```bash
 curl "https://<your-worker>.workers.dev/regis?key=<REGIS_KEY>"
@@ -100,7 +109,7 @@ curl -H "Authorization: Bearer <REGIS_KEY>" https://<your-worker>.workers.dev/de
 ```
 
 Without `REGIS_KEY` the Worker stays open, which is the default. The comparison is constant-time;
-`GET /` reports `"auth": "key"` or `"auth": "off"`.
+`GET /` reports `"auth": "key"` or `"auth": "off"` and the effective `defaultTtl`.
 
 ## Response
 

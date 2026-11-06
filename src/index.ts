@@ -12,6 +12,8 @@ const DEFAULT_NAME = "warp-regis";
 export interface Env {
   /** When set, every /regis and /device request must carry it via ?key= or a bearer token. */
   REGIS_KEY?: string;
+  /** Default cache lifetime in seconds for cached devices (default 86400). */
+  DEVICE_TTL?: string;
 }
 
 const CORS_HEADERS: Record<string, string> = {
@@ -49,10 +51,20 @@ function text(body: string): Response {
   });
 }
 
-function parseTtl(raw: string | null): number {
-  const value = Number.parseInt(raw ?? "", 10);
-  if (!Number.isFinite(value)) return DEFAULT_TTL;
+function clampTtl(value: number): number {
   return Math.min(MAX_TTL, Math.max(MIN_TTL, value));
+}
+
+/** Default TTL: DEVICE_TTL when set and numeric, otherwise 24 hours. */
+function resolveDefaultTtl(env: Env): number {
+  const value = Number.parseInt(env.DEVICE_TTL ?? "", 10);
+  return Number.isFinite(value) ? clampTtl(value) : DEFAULT_TTL;
+}
+
+function parseTtl(raw: string | null, fallback: number): number {
+  if (raw === null || raw.trim() === "") return fallback;
+  const value = Number.parseInt(raw, 10);
+  return Number.isFinite(value) ? clampTtl(value) : fallback;
 }
 
 function parseName(raw: string | null): string {
@@ -119,9 +131,9 @@ function parseFormat(raw: string | null, fallback: "json" | "raw"): "json" | "ra
   return null;
 }
 
-async function handleRegis(url: URL): Promise<Response> {
+async function handleRegis(url: URL, env: Env): Promise<Response> {
   const name = parseName(url.searchParams.get("name"));
-  const ttl = parseTtl(url.searchParams.get("ttl"));
+  const ttl = parseTtl(url.searchParams.get("ttl"), resolveDefaultTtl(env));
   const mode = parseMode(url.searchParams.get("mode"));
   const format = parseFormat(url.searchParams.get("format"), "json");
 
@@ -181,7 +193,12 @@ export default {
     }
 
     if (path === "/") {
-      return json({ name: "warp-regis", routes: ROUTES, auth: env.REGIS_KEY ? "key" : "off" });
+      return json({
+        name: "warp-regis",
+        routes: ROUTES,
+        auth: env.REGIS_KEY ? "key" : "off",
+        defaultTtl: resolveDefaultTtl(env),
+      });
     }
 
     const guarded = path === "/regis" || path === "/device" || path.startsWith("/device/");
@@ -196,7 +213,7 @@ export default {
     }
 
     if (path === "/regis") {
-      return handleRegis(url);
+      return handleRegis(url, env);
     }
 
     // Both endpoints default to the compact device JSON; raw/conf must be explicit.
