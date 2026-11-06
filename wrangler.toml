@@ -1,0 +1,9 @@
+name = "warp-regis"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# No bindings are required. Devices are kept in the Cloudflare Cache API,
+# so a bare `wrangler deploy` is enough to get a working instance.
+
+[observability]
+enabled = true
