@@ -8,18 +8,40 @@ Cache API, so deploying is a single `wrangler deploy` with zero bindings to prov
 
 ## How registration works
 
-The flow mirrors the one used by the freev6 client and other MASQUE clients:
+Both modes start from the same call:
 
-1. `POST https://api.cloudflareclient.com/v0a4471/reg`
-   Bootstraps an account with a throwaway curve25519 key and returns `id` + `token`.
-2. `PATCH /v0a4471/reg/{id}` (Bearer token)
-   Swaps in a freshly generated P-256 (secp256r1) key with `tunnel_type: masque`, which returns
-   the tunnel addresses (`config.interface.addresses`) and the peer public key
-   (`config.peers[0].public_key`).
+`POST https://api.cloudflareclient.com/v0a4471/reg` bootstraps a WARP account and returns
+`id`, `token`, the tunnel addresses and the peer public key.
 
-The P-256 private key is exported as SEC1 / RFC 5915 DER and base64-encoded, matching Go's
-`x509.MarshalECPrivateKey` output, so the value can be pasted straight into MASQUE-capable
-clients.
+What happens next depends on the mode:
+
+| Mode | Request extra | Key type | Result |
+| --- | --- | --- | --- |
+| `masque` (default) | `PATCH /v0a4471/reg/{id}` with a P-256 key, `tunnel_type: masque` | secp256r1 (P-256) | MASQUE / Connect-IP credentials |
+| `wireguard` (`?mode=wg`) | none — the account is already enrolled with the key sent at registration | curve25519 (X25519) | Standard WireGuard credentials + `wg-quick` config |
+
+The MASQUE private key is exported as SEC1 / RFC 5915 DER and base64-encoded, matching Go's
+`x509.MarshalECPrivateKey` output. The WireGuard private key is the raw 32-byte clamped scalar,
+base64-encoded — exactly what `[Interface] PrivateKey` expects.
+
+WireGuard devices need a *real* Curve25519 keypair, because the key sent to `/reg` is the one the
+tunnel uses; the public key is derived locally with a small RFC 7748 implementation
+(`src/x25519.ts`), so no dependency and no runtime WebCrypto support is required.
+
+## MASQUE vs WireGuard
+
+| | MASQUE | WireGuard |
+| --- | --- | --- |
+| Transport | QUIC / HTTP/3 + Connect-IP (RFC 9484), TLS 1.3 | WireGuard over UDP (2408, 500, 1701, 4500) |
+| Key type | P-256 / secp256r1 | Curve25519 / X25519 |
+| Registration calls | `POST /reg`, then `PATCH /reg/{id}` | `POST /reg` only |
+| Config format | client-specific JSON | `wg-quick` / native `.conf` |
+| Client support | mihomo, sing-box, usque, this worker | official apps, `wireguard-tools`, most routers |
+| Survives UDP blocking | yes, looks like HTTPS/QUIC on 443 | no, needs UDP reachability |
+
+Both modes hit the same account API and yield the same tunnel addresses. MASQUE clients (usque,
+freev6) also register with a curve25519 key first and only then swap it for a P-256 key, so the
+WireGuard path is the shorter subset of the same flow.
 
 ## Deploy
 
@@ -45,13 +67,18 @@ Query parameters for `/regis`:
 
 | Param | Default | Description |
 | --- | --- | --- |
-| `name` | `warp-regis` | Device name sent with the MASQUE enrollment (max 64 chars, sanitized). |
+| `name` | `warp-regis` | Device name. Applied server-side for `masque`; informational for `wireguard`. |
 | `ttl` | `86400` | Cache lifetime in seconds, clamped to `60`–`604800`. |
+| `mode` | `masque` | `masque` or `wg` (alias `wireguard`). |
+| `format` | `json` | `conf` renders a `wg-quick` config (WireGuard devices only, otherwise `409`). |
 
 ```bash
 curl https://<your-worker>.workers.dev/regis
 curl https://<your-worker>.workers.dev/regis?name=phone&ttl=3600
+curl https://<your-worker>.workers.dev/regis?mode=wg            # classic WireGuard
+curl https://<your-worker>.workers.dev/regis?mode=wg&format=conf
 curl https://<your-worker>.workers.dev/device
+curl https://<your-worker>.workers.dev/device?format=conf
 ```
 
 ## Response
@@ -61,6 +88,7 @@ untouched upstream responses for anything the mapping does not cover.
 
 ```json
 {
+  "mode": "masque",
   "deviceId": "11111111-1111-4111-8111-111111111111",
   "token": "22222222-2222-4222-8222-222222222222",
   "name": "warp-regis",
@@ -70,6 +98,7 @@ untouched upstream responses for anything the mapping does not cover.
   "ipv4": "172.16.0.2",
   "ipv6": "2606:4700:110:8f8a:81c6:c5fa:f31c:a4f2",
   "endpoint": "engage.cloudflareclient.com:2408",
+  "clientId": "h6xM",
   "registeredAt": "2026-11-06T18:00:25.758Z",
   "raw": {
     "register": { "...": "POST /reg response" },
@@ -80,10 +109,33 @@ untouched upstream responses for anything the mapping does not cover.
 
 Field notes:
 
-- `privateKey` — P-256 private key, SEC1 DER, base64.
-- `peerPublicKey` — base64 DER, PEM armor stripped and whitespace removed.
+- `mode` — `masque` or `wireguard`; decides how the keys are encoded.
+- `privateKey` — `masque`: P-256 private key, SEC1 DER, base64. `wireguard`: raw 32-byte clamped
+  Curve25519 scalar, base64.
+- `publicKey` — SPKI DER (masque) or raw 32 bytes (wireguard), base64.
+- `peerPublicKey` — base64 DER for masque (PEM armor stripped), raw 32 bytes for wireguard.
 - `endpoint` — `endpoint.host` from the peer config; `endpoint.v4` is frequently reported with
   port `0`, so the hostname is preferred.
+- `clientId` — `config.client_id`; some WARP clients want it as the `reserved` field.
+
+### WireGuard config output
+
+With `?mode=wg&format=conf` (or `?format=conf` on `/device`) the Worker returns a `wg-quick`
+config instead of JSON:
+
+```ini
+[Interface]
+PrivateKey = oBwoV/ivsgjHrQls2RjSMrOstI670o87WfP0XnJD9mo=
+Address = 172.16.0.2/32, 2606:4700:110:846d:5e52:2b9c:2d84:c1f7/128
+DNS = 1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001
+MTU = 1280
+
+[Peer]
+PublicKey = bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = engage.cloudflareclient.com:2408
+PersistentKeepalive = 25
+```
 
 ## Storage model
 

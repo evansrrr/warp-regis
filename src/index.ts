@@ -1,5 +1,7 @@
 import { readDevice, writeDevice } from "./store";
+import type { RegistrationMode, WarpDevice } from "./types";
 import { registerDevice } from "./warp";
+import { toWireGuardConfig } from "./wireguard";
 
 const DEFAULT_TTL = 86_400;
 const MIN_TTL = 60;
@@ -13,8 +15,8 @@ const CORS_HEADERS: Record<string, string> = {
 };
 
 const ROUTES = {
-  "GET /regis": "Register a new WARP (MASQUE) device and cache the result.",
-  "GET /device": "Return the most recently registered device.",
+  "GET /regis": "Register a new WARP device and cache the result. Params: name, ttl, mode=masque|wg, format=json|conf.",
+  "GET /device": "Return the most recently registered device. Params: format=json|conf.",
   "GET /device/{deviceId}": "Return a specific device registered on this colo.",
 };
 
@@ -31,6 +33,16 @@ function json(body: unknown, status = 200, extraHeaders: Record<string, string> 
   });
 }
 
+function text(body: string): Response {
+  return new Response(body, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+      ...CORS_HEADERS,
+    },
+  });
+}
+
 function parseTtl(raw: string | null): number {
   const value = Number.parseInt(raw ?? "", 10);
   if (!Number.isFinite(value)) return DEFAULT_TTL;
@@ -42,14 +54,44 @@ function parseName(raw: string | null): string {
   return name || DEFAULT_NAME;
 }
 
+function parseMode(raw: string | null): RegistrationMode | null {
+  if (!raw) return "masque";
+  const value = raw.toLowerCase();
+  if (value === "masque") return "masque";
+  if (value === "wg" || value === "wireguard") return "wireguard";
+  return null;
+}
+
+function render(device: WarpDevice, format: string | null): Response {
+  if (format === "conf") {
+    if (device.mode !== "wireguard") {
+      return json(
+        {
+          error: "unsupported format",
+          message: "MASQUE devices have no wg-quick equivalent; use the default JSON output.",
+        },
+        409,
+      );
+    }
+    return text(toWireGuardConfig(device));
+  }
+  return json(device);
+}
+
 async function handleRegis(url: URL): Promise<Response> {
   const name = parseName(url.searchParams.get("name"));
   const ttl = parseTtl(url.searchParams.get("ttl"));
+  const mode = parseMode(url.searchParams.get("mode"));
+  const format = url.searchParams.get("format");
+
+  if (!mode) {
+    return json({ error: "invalid mode", hint: "Use mode=masque (default) or mode=wg." }, 400);
+  }
 
   try {
-    const device = await registerDevice(name);
+    const device = await registerDevice(name, mode);
     await writeDevice(device, ttl);
-    return json(device, 200, { "X-Device-Id": device.deviceId });
+    return render(device, format);
   } catch (error) {
     return json(
       {
@@ -61,7 +103,7 @@ async function handleRegis(url: URL): Promise<Response> {
   }
 }
 
-async function handleDevice(name: string): Promise<Response> {
+async function handleDevice(name: string, format: string | null): Promise<Response> {
   const device = await readDevice(name);
   if (!device) {
     return json(
@@ -75,7 +117,7 @@ async function handleDevice(name: string): Promise<Response> {
       404,
     );
   }
-  return json(device);
+  return render(device, format);
 }
 
 export default {
@@ -99,14 +141,16 @@ export default {
       return handleRegis(url);
     }
 
+    const format = url.searchParams.get("format");
+
     if (path === "/device") {
-      return handleDevice("latest");
+      return handleDevice("latest", format);
     }
 
     if (path.startsWith("/device/")) {
       const id = decodeURIComponent(path.slice("/device/".length));
-      if (!id || id === "latest") return handleDevice("latest");
-      return handleDevice(id);
+      if (!id || id === "latest") return handleDevice("latest", format);
+      return handleDevice(id, format);
     }
 
     return json({ error: "not found", routes: ROUTES }, 404);

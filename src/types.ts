@@ -1,15 +1,23 @@
+export type RegistrationMode = "masque" | "wireguard";
+
 export interface WarpDevice {
+  /** How the device was enrolled. */
+  mode: RegistrationMode;
   /** Cloudflare device id returned by POST /reg. */
   deviceId: string;
   /** Bearer token for the device; keep it private. */
   token: string;
-  /** Device name sent with the MASQUE enrollment. */
+  /** Device name sent with the MASQUE enrollment (empty for WireGuard devices). */
   name: string;
-  /** P-256 private key, SEC1 DER, base64 (same encoding as the reference implementation). */
+  /**
+   * Private key, base64.
+   * - `masque`: P-256, SEC1 / RFC 5915 DER.
+   * - `wireguard`: raw 32-byte clamped Curve25519 scalar (WireGuard PrivateKey).
+   */
   privateKey: string;
-  /** P-256 public key, SPKI DER, base64. */
+  /** Public key matching `privateKey`. SPKI DER for masque, raw 32 bytes for WireGuard. */
   publicKey: string;
-  /** Peer (server) public key, base64 DER with the PEM armor stripped. */
+  /** Peer (server) public key, base64 DER for masque and raw 32 bytes for WireGuard. */
   peerPublicKey: string;
   /** Assigned tunnel IPv4 address. */
   ipv4: string;
@@ -17,16 +25,19 @@ export interface WarpDevice {
   ipv6: string;
   /** Peer endpoint, when the API returns one. */
   endpoint?: string;
+  /** Cloudflare `config.client_id`; required by some WARP clients as `reserved`. */
+  clientId?: string;
   /** ISO-8601 timestamp of the registration. */
   registeredAt: string;
   /** Unmodified upstream responses, for downstream tooling. */
   raw: {
     register: unknown;
-    enroll: unknown;
+    enroll?: unknown;
   };
 }
 
 export interface UpstreamConfig {
+  client_id?: string;
   interface?: {
     addresses?: {
       v4?: string;

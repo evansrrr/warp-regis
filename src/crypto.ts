@@ -1,5 +1,7 @@
 /** Byte / encoding helpers plus the P-256 key handling used by the registrar. */
 
+import { clampScalar, x25519Base } from "./x25519";
+
 export function randomBytes(size: number): Uint8Array {
   const bytes = new Uint8Array(size);
   crypto.getRandomValues(bytes);
@@ -21,6 +23,22 @@ export function randomBase64(size: number): string {
 
 export function randomHex(size: number): string {
   return [...randomBytes(size)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export interface X25519KeyPair {
+  /** Raw 32-byte clamped private scalar, base64. WireGuard's PrivateKey. */
+  privateKey: string;
+  /** Raw 32-byte public key, base64. WireGuard's PublicKey. */
+  publicKey: string;
+}
+
+/** Curve25519 keypair for classic WireGuard mode. */
+export function generateX25519KeyPair(): X25519KeyPair {
+  const privateKey = clampScalar(randomBytes(32));
+  return {
+    privateKey: toBase64(privateKey),
+    publicKey: toBase64(x25519Base(privateKey)),
+  };
 }
 
 export interface P256KeyPair {
