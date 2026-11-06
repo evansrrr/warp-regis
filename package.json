@@ -1,18 +1,34 @@
 {
   "name": "warp-regis",
-  "version": "1.5.0",
-  "private": true,
-  "type": "module",
-  "description": "Stateless Cloudflare WARP (MASQUE) device registrar running on Cloudflare Workers",
+  "version": "2.0.0",
+  "description": "Stateless Cloudflare WARP device registrar for Cloudflare Workers: MASQUE and WireGuard modes, optional KV storage",
   "license": "MIT",
+  "type": "module",
+  "private": true,
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "warp",
+    "masque",
+    "wireguard",
+    "wrangler"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/USER/warp-regis.git"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.6.0",
     "@cloudflare/workers-types": "^5.20261104.1",
     "typescript": "^5.7.2",
+    "vitest": "^4.1.0",
     "wrangler": "^4.0.0"
   }
 }

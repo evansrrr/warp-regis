@@ -192,7 +192,7 @@ Constant / ignorable for client configuration: `type` (`"a"`), `model` (`"PC"`),
 
 ## Adopted compact shape (A)
 
-Nine fields, connection credentials only. `?format=json` (the default everywhere) returns exactly
+Nine connection fields plus `reserved`. `?format=json` (the default everywhere) returns exactly
 this; `?format=raw` is the only way to get the upstream bodies.
 
 ```json
@@ -205,7 +205,8 @@ this; `?format=raw` is the only way to get the upstream bodies.
   "ipv4": "172.16.0.2",
   "ipv6": "2606:4700:110:...",
   "endpoint": "engage.cloudflareclient.com:2408",
-  "clientId": "OapF"
+  "clientId": "OapF",
+  "reserved": [57, 170, 69]
 }
 ```
 
@@ -218,8 +219,13 @@ this; `?format=raw` is the only way to get the upstream bodies.
 | `peerPublicKey` | `register.config.peers[0].public_key` | `enroll.config.peers[0].public_key`, PEM stripped |
 | `ipv4` | `config.interface.addresses.v4` | `enroll.config.interface.addresses.v4` |
 | `ipv6` | `config.interface.addresses.v6` | `enroll.config.interface.addresses.v6` |
-| `endpoint` | `peers[0].endpoint.host` | `peers[0].endpoint.host` |
+| `endpoint` | `peers[0].endpoint.host` + first advertised port (2408) | `peers[0].endpoint.host` + first advertised port (443) |
 | `clientId` | `config.client_id` | `enroll.config.client_id` |
+| `reserved` | base64-decoded `client_id` bytes | base64-decoded `client_id` bytes |
+
+`ports` is still kept on the stored record (it powers the endpoint), but is not part of the public
+shape. `endpoint` is normalised to `host:first-port`, because the raw `endpoint.v4` often ends in
+`:0`.
 
 Deliberately dropped: `name`, `type`, `model`, `locale`, `place`, `enabled`, `warp_enabled`,
 `waitlist_enabled`, `install_id`, `fcm_token`, `created`, `updated`, `tos`, `policy`,
@@ -227,5 +233,5 @@ Deliberately dropped: `name`, `type`, `model`, `locale`, `place`, `enabled`, `wa
 `account` block (`license`, `ttl`, `warp_plus`, `quota`, `usage`). If you need any of them, read
 `?format=raw` or call `GET /reg/{id}` yourself.
 
-The full record (including `raw`) stays in the Cache API, because `?format=raw` and
+The full record (including `raw` and `ports`) stays in storage, because `?format=raw` and
 `?format=conf` are rendered from it.

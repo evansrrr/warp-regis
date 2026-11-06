@@ -24,7 +24,7 @@ export function toWireGuardConfig(device: WarpDevice): string {
     "[Peer]",
     `PublicKey = ${device.peerPublicKey}`,
     "AllowedIPs = 0.0.0.0/0, ::/0",
-    `Endpoint = ${device.endpoint ?? DEFAULT_ENDPOINT}`,
+    `Endpoint = ${device.endpoint ?? DEFAULT_ENDPOINT.wireguard}`,
     "PersistentKeepalive = 25",
   ];
 

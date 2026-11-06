@@ -1,20 +1,21 @@
-import { toSummary } from "./device";
-import { readDevice, writeDevice } from "./store";
-import type { RegistrationMode, WarpDevice } from "./types";
-import { registerDevice } from "./warp";
+import { configuredKeys, isAuthorized } from "./auth";
+import { DEFAULT_ENDPOINT, toSummary } from "./device";
+import { createStore } from "./store";
+import type { Env, RegistrationMode, WarpDevice } from "./types";
+import {
+  UpstreamError,
+  enrollMasque,
+  getAccount,
+  getDevices,
+  registerDevice,
+  updateLicense,
+} from "./warp";
 import { toWireGuardConfig } from "./wireguard";
 
 const DEFAULT_TTL = 86_400;
 const MIN_TTL = 60;
 const MAX_TTL = 604_800;
 const DEFAULT_NAME = "warp-regis";
-
-export interface Env {
-  /** When set, every /regis and /device request must carry it via ?key= or a bearer token. */
-  REGIS_KEY?: string;
-  /** Default cache lifetime in seconds for cached devices (default 86400). */
-  DEVICE_TTL?: string;
-}
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -23,10 +24,14 @@ const CORS_HEADERS: Record<string, string> = {
 };
 
 const ROUTES = {
-  "GET /regis": "Register a new WARP device. Params: name, ttl, mode=masque|wg, format=json|raw|conf.",
-  "GET /device": "Return the latest device on this colo. Params: format=json|raw|conf.",
-  "GET /device/{deviceId}": "Return a specific device registered on this colo.",
+  "GET /regis": "Register a new WARP device. Params: name, ttl, mode, format, jwt.",
+  "GET /device": "Latest device on this instance. Params: format.",
+  "GET /device/{deviceId}": "Specific device. Params: format.",
+  "GET /enroll": "Re-enroll the latest device as MASQUE. Params: name, ttl, format.",
+  "GET /account": "Account of the latest device. Params: license=<key>, license=-, devices=1.",
 };
+
+type Format = "json" | "raw" | "conf";
 
 function json(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body, null, 2), {
@@ -49,6 +54,27 @@ function text(body: string): Response {
       ...CORS_HEADERS,
     },
   });
+}
+
+function fail(
+  code: string,
+  message: string,
+  status: number,
+  extra: Record<string, unknown> = {},
+): Response {
+  return json({ code, error: message, ...extra }, status);
+}
+
+/** Maps internal/upstream failures onto the public error shape. */
+function mapError(error: unknown, code: string): Response {
+  if (error instanceof UpstreamError) {
+    return fail(code, "upstream request failed", 502, {
+      upstreamStatus: error.status,
+      upstreamPath: error.path,
+      detail: error.detail.slice(0, 500),
+    });
+  }
+  return fail(code, error instanceof Error ? error.message : String(error), 502);
 }
 
 function clampTtl(value: number): number {
@@ -80,41 +106,28 @@ function parseMode(raw: string | null): RegistrationMode | null {
   return null;
 }
 
-function safeEqual(left: string, right: string): boolean {
-  const a = new TextEncoder().encode(left);
-  const b = new TextEncoder().encode(right);
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let index = 0; index < a.length; index += 1) {
-    diff |= a[index] ^ b[index];
-  }
-  return diff === 0;
+function parseFormat(raw: string | null, fallback: Format = "json"): Format | null {
+  if (!raw) return fallback;
+  const value = raw.toLowerCase();
+  if (value === "json" || value === "raw" || value === "conf") return value;
+  return null;
 }
 
-/** Constant-time check of `?key=` or `Authorization: Bearer <key>` against REGIS_KEY. */
-function isAuthorized(request: Request, url: URL, env: Env): boolean {
-  const expected = env.REGIS_KEY;
-  if (!expected) return true;
-
-  const header = request.headers.get("Authorization") ?? "";
-  const bearer = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
-  const provided = url.searchParams.get("key") ?? bearer;
-
-  return provided.length > 0 && safeEqual(provided, expected);
+async function isRateLimited(request: Request, env: Env): Promise<boolean> {
+  if (!env.RATE_LIMITER) return false;
+  const key = request.headers.get("CF-Connecting-IP") ?? "anonymous";
+  const { success } = await env.RATE_LIMITER.limit({ key });
+  return !success;
 }
 
-function render(device: WarpDevice, format: "json" | "raw" | "conf"): Response {
-  if (format === "raw") {
-    return json(device.raw);
-  }
+function render(device: WarpDevice, format: Format): Response {
+  if (format === "raw") return json(device.raw);
 
   if (format === "conf") {
     if (device.mode !== "wireguard") {
-      return json(
-        {
-          error: "unsupported format",
-          message: "MASQUE devices have no wg-quick equivalent; use format=json or format=raw.",
-        },
+      return fail(
+        "unsupported_format",
+        "MASQUE devices have no wg-quick equivalent; use format=json or format=raw.",
         409,
       );
     }
@@ -124,59 +137,92 @@ function render(device: WarpDevice, format: "json" | "raw" | "conf"): Response {
   return json(toSummary(device));
 }
 
-function parseFormat(raw: string | null, fallback: "json" | "raw"): "json" | "raw" | "conf" | null {
-  if (!raw) return fallback;
-  const value = raw.toLowerCase();
-  if (value === "json" || value === "raw" || value === "conf") return value;
-  return null;
-}
-
 async function handleRegis(url: URL, env: Env): Promise<Response> {
+  const mode = parseMode(url.searchParams.get("mode"));
+  const format = parseFormat(url.searchParams.get("format"));
   const name = parseName(url.searchParams.get("name"));
   const ttl = parseTtl(url.searchParams.get("ttl"), resolveDefaultTtl(env));
-  const mode = parseMode(url.searchParams.get("mode"));
-  const format = parseFormat(url.searchParams.get("format"), "json");
+  const jwt = url.searchParams.get("jwt")?.trim() || undefined;
 
   if (!mode) {
-    return json({ error: "invalid mode", hint: "Use mode=masque (default) or mode=wg." }, 400);
+    return fail("invalid_mode", "mode must be masque or wg", 400, {
+      hint: "Use mode=masque (default) or mode=wg.",
+    });
   }
   if (!format) {
-    return json(
-      { error: "invalid format", hint: "Use format=json (default), raw, or conf." },
-      400,
-    );
+    return fail("invalid_format", "format must be json, raw or conf", 400);
   }
 
   try {
-    const device = await registerDevice(name, mode);
-    await writeDevice(device, ttl);
+    const device = await registerDevice(name, mode, { jwt });
+    await createStore(env).write(device, ttl);
     return render(device, format);
   } catch (error) {
-    return json(
-      {
-        error: "registration failed",
-        message: error instanceof Error ? error.message : String(error),
-      },
-      502,
-    );
+    return mapError(error, "registration_failed");
   }
 }
 
-async function handleDevice(name: string, format: "json" | "raw" | "conf"): Promise<Response> {
-  const device = await readDevice(name);
+async function handleDevice(name: string, format: Format, env: Env): Promise<Response> {
+  const device = await createStore(env).read(name);
   if (!device) {
-    return json(
-      {
-        error: "device not found",
-        hint:
-          name === "latest"
-            ? "Hit GET /regis first. Results are stored in the Cache API, so a miss is also possible on a different colo or after the TTL expires."
-            : "No device with this id is cached on this colo.",
-      },
-      404,
-    );
+    return fail("not_found", "device not found", 404, {
+      hint:
+        name === "latest"
+          ? "Hit GET /regis first. With the Cache API backend a miss is also possible on another colo or after the TTL expires; bind WARP_KV for durable storage."
+          : "No device with this id is stored on this instance.",
+    });
   }
   return render(device, format);
+}
+
+async function handleEnroll(url: URL, env: Env): Promise<Response> {
+  const format = parseFormat(url.searchParams.get("format"));
+  const ttl = parseTtl(url.searchParams.get("ttl"), resolveDefaultTtl(env));
+  if (!format) {
+    return fail("invalid_format", "format must be json, raw or conf", 400);
+  }
+
+  const store = createStore(env);
+  const current = await store.read("latest");
+  if (!current) {
+    return fail("not_found", "no device to enroll", 404, { hint: "Call GET /regis first." });
+  }
+  if (current.mode === "masque") {
+    return fail("already_masque", "device is already enrolled as MASQUE", 409);
+  }
+
+  const name = parseName(url.searchParams.get("name") ?? current.name);
+  try {
+    const device = await enrollMasque(current, name);
+    await store.write(device, ttl);
+    return render(device, format);
+  } catch (error) {
+    return mapError(error, "enroll_failed");
+  }
+}
+
+async function handleAccount(url: URL, env: Env): Promise<Response> {
+  const store = createStore(env);
+  const device = await store.read("latest");
+  if (!device) {
+    return fail("not_found", "no device in storage", 404, { hint: "Call GET /regis first." });
+  }
+
+  try {
+    if (url.searchParams.get("devices") === "1") {
+      return json(await getDevices(device));
+    }
+
+    const license = url.searchParams.get("license");
+    if (license !== null) {
+      const result = await updateLicense(device, license === "-" ? null : license);
+      return json({ ok: true, license: license === "-" ? null : license, upstream: result });
+    }
+
+    return json(await getAccount(device));
+  } catch (error) {
+    return mapError(error, "account_failed");
+  }
 }
 
 export default {
@@ -189,49 +235,61 @@ export default {
     }
 
     if (request.method !== "GET") {
-      return json({ error: "method not allowed", hint: "Only GET is supported." }, 405);
+      return fail("method_not_allowed", "only GET is supported", 405);
     }
 
     if (path === "/") {
       return json({
         name: "warp-regis",
         routes: ROUTES,
-        auth: env.REGIS_KEY ? "key" : "off",
+        auth: configuredKeys(env).length > 0 ? "key" : "off",
+        storage: env.WARP_KV ? "kv" : "cache",
         defaultTtl: resolveDefaultTtl(env),
       });
     }
 
-    const guarded = path === "/regis" || path === "/device" || path.startsWith("/device/");
+    const guarded =
+      path === "/regis" ||
+      path === "/device" ||
+      path.startsWith("/device/") ||
+      path === "/enroll" ||
+      path === "/account";
+
     if (guarded && !isAuthorized(request, url, env)) {
-      return json(
-        {
-          error: "unauthorized",
-          hint: "Pass the key from REGIS_KEY as ?key=<key> or an Authorization: Bearer <key> header.",
-        },
-        401,
-      );
+      return fail("unauthorized", "missing or invalid key", 401, {
+        hint: "Send Authorization: Bearer <REGIS_KEY> (preferred) or ?key=<REGIS_KEY>.",
+      });
     }
 
     if (path === "/regis") {
+      if (await isRateLimited(request, env)) {
+        return fail("rate_limited", "too many registration attempts", 429);
+      }
       return handleRegis(url, env);
     }
 
-    // Both endpoints default to the compact device JSON; raw/conf must be explicit.
-    const format = parseFormat(url.searchParams.get("format"), "json");
+    if (path === "/enroll") {
+      return handleEnroll(url, env);
+    }
+
+    if (path === "/account") {
+      return handleAccount(url, env);
+    }
+
+    const format = parseFormat(url.searchParams.get("format"));
     if (!format) {
-      return json({ error: "invalid format", hint: "Use format=json (default), raw, or conf." }, 400);
+      return fail("invalid_format", "format must be json, raw or conf", 400);
     }
 
     if (path === "/device") {
-      return handleDevice("latest", format);
+      return handleDevice("latest", format, env);
     }
 
     if (path.startsWith("/device/")) {
       const id = decodeURIComponent(path.slice("/device/".length));
-      if (!id || id === "latest") return handleDevice("latest", format);
-      return handleDevice(id, format);
+      return handleDevice(id || "latest", format, env);
     }
 
-    return json({ error: "not found", routes: ROUTES }, 404);
+    return fail("not_found", "unknown route", 404, { routes: ROUTES });
   },
 };

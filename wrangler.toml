@@ -2,14 +2,26 @@ name = "warp-regis"
 main = "src/index.ts"
 compatibility_date = "2026-01-01"
 
-# No bindings are required. Devices are kept in the Cloudflare Cache API,
-# so a bare `wrangler deploy` is enough to get a working instance.
+# No bindings are required: without WARP_KV, devices live in the Cache API and a
+# bare `wrangler deploy` is enough. Bind KV for durable, globally readable devices.
 
 # Optional settings. Prefer `wrangler secret put REGIS_KEY` over committing a
 # value here; a plain var also works for a non-sensitive deployment.
 # [vars]
-# REGIS_KEY = "change-me"
+# REGIS_KEY = "change-me,second-key-for-rotation"
 # DEVICE_TTL = "604800"
+
+# Optional durable storage. Create it first:
+#   npx wrangler kv namespace create WARP_KV
+# [[kv_namespaces]]
+# binding = "WARP_KV"
+# id = "<namespace id>"
+
+# Optional rate limiting on /regis. Requires the Workers Rate Limiting binding.
+# [[ratelimits]]
+# name = "RATE_LIMITER"
+# namespace_id = "1001"
+# simple = { limit = 10, period = 60 }
 
 [observability]
 enabled = true

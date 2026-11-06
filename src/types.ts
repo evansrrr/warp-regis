@@ -1,6 +1,28 @@
 export type RegistrationMode = "masque" | "wireguard";
 
-/** Minimal public shape returned by `?format=json`. Nine fields, no raw payloads. */
+/** Minimal shape of the KV binding, so the Worker does not depend on global typings. */
+export interface KvNamespaceLike {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+}
+
+/** Minimal shape of the Workers Rate Limiting binding. */
+export interface RateLimiterLike {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
+export interface Env {
+  /** One or more shared secrets, comma separated. Unset or empty means open access. */
+  REGIS_KEY?: string;
+  /** Default cache lifetime in seconds (default 86400). */
+  DEVICE_TTL?: string;
+  /** Optional KV namespace; when absent the Cache API is used instead. */
+  WARP_KV?: KvNamespaceLike;
+  /** Optional rate limiting binding, applied to /regis. */
+  RATE_LIMITER?: RateLimiterLike;
+}
+
+/** Minimal public shape returned by `?format=json`. */
 export interface DeviceSummary {
   mode: RegistrationMode;
   deviceId: string;
@@ -11,9 +33,11 @@ export interface DeviceSummary {
   ipv6: string;
   endpoint: string;
   clientId: string;
+  /** `clientId` decoded into the three bytes some WARP clients expect as `reserved`. */
+  reserved?: number[];
 }
 
-/** Full record kept in the Cache API so `?format=raw` and `?format=conf` still work. */
+/** Full record kept in storage so `?format=raw` and `?format=conf` still work. */
 export interface WarpDevice {
   /** How the device was enrolled. */
   mode: RegistrationMode;
@@ -39,6 +63,8 @@ export interface WarpDevice {
   ipv6: string;
   /** Peer endpoint, when the API returns one. */
   endpoint?: string;
+  /** Ports advertised for the peer, in upstream order. */
+  ports?: number[];
   /** Cloudflare `config.client_id`; required by some WARP clients as `reserved`. */
   clientId?: string;
   /** ISO-8601 timestamp of the registration. */
@@ -64,6 +90,7 @@ export interface UpstreamConfig {
       v4?: string;
       v6?: string;
       host?: string;
+      ports?: number[];
     };
   }>;
 }
