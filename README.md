@@ -58,9 +58,9 @@ Requirements: a Cloudflare account and Node.js 18+ for the Wrangler CLI.
 
 | Route | Description |
 | --- | --- |
-| `GET /` | Route index. |
+| `GET /` | Route index (also reports whether key auth is on). |
 | `GET /regis` | Register a new device, cache it, and return it. |
-| `GET /device` | Return the most recently registered device on this colo. |
+| `GET /device` | Return the latest device — raw upstream response by default. |
 | `GET /device/{deviceId}` | Return a specific cached device. |
 
 Query parameters for `/regis`:
@@ -70,21 +70,48 @@ Query parameters for `/regis`:
 | `name` | `warp-regis` | Device name. Applied server-side for `masque`; informational for `wireguard`. |
 | `ttl` | `86400` | Cache lifetime in seconds, clamped to `60`–`604800`. |
 | `mode` | `masque` | `masque` or `wg` (alias `wireguard`). |
-| `format` | `json` | `conf` renders a `wg-quick` config (WireGuard devices only, otherwise `409`). |
+| `format` | `json` | `json`, `raw` (upstream responses only) or `conf` (wg-quick, WireGuard only). |
+
+`/device` accepts `format` too, but defaults to `raw`:
+
+| Param | Default | Description |
+| --- | --- | --- |
+| `format` | `raw` | `raw`, `json` (normalized) or `conf`. |
 
 ```bash
 curl https://<your-worker>.workers.dev/regis
 curl https://<your-worker>.workers.dev/regis?name=phone&ttl=3600
 curl https://<your-worker>.workers.dev/regis?mode=wg            # classic WireGuard
 curl https://<your-worker>.workers.dev/regis?mode=wg&format=conf
-curl https://<your-worker>.workers.dev/device
+curl https://<your-worker>.workers.dev/device                   # raw upstream response
+curl https://<your-worker>.workers.dev/device?format=json       # normalized
 curl https://<your-worker>.workers.dev/device?format=conf
 ```
 
+## Access control
+
+Set `REGIS_KEY` and `/regis` and `/device` stop answering without it:
+
+```bash
+npx wrangler secret put REGIS_KEY     # or [vars] REGIS_KEY = "..." in wrangler.toml
+```
+
+Then pass it as `?key=` or as a bearer token:
+
+```bash
+curl "https://<your-worker>.workers.dev/regis?key=<REGIS_KEY>"
+curl -H "Authorization: Bearer <REGIS_KEY>" https://<your-worker>.workers.dev/device
+```
+
+Without `REGIS_KEY` the Worker stays open, which is the default. The comparison is constant-time;
+`GET /` reports `"auth": "key"` or `"auth": "off"`.
+
 ## Response
 
-`/regis` and `/device` return the same shape. Normalized fields are on top, and `raw` keeps the
-untouched upstream responses for anything the mapping does not cover.
+`/regis` returns the normalized device object by default; `/device` returns the untouched upstream
+response (`{ "register": {...} }`, plus `"enroll"` for MASQUE) unless you ask for
+`?format=json`. Both full payloads, a field-by-field diff and candidate compact shapes live in
+[docs/response-shape.md](docs/response-shape.md).
 
 ```json
 {
@@ -149,11 +176,11 @@ This is deliberately not a database-backed service:
 
 ## Security
 
-- **Everything is public by design.** Anyone who can reach the Worker can register devices and
-  read the returned `token` / `privateKey`. Treat a deployed instance as a personal endpoint and
-  do not post the URL publicly, or put it behind Cloudflare Access.
-- The Worker never requires authentication. If you need a gate, add a `REGIS_TOKEN` check or a
-  WAF rule in front of `/regis`.
+- **Open by default.** Anyone who can reach the Worker can register devices and read the returned
+  `token` / `privateKey` unless `REGIS_KEY` is set. Treat a deployed instance as a personal
+  endpoint, keep the key out of URLs you share, or put it behind Cloudflare Access.
+- Set `REGIS_KEY` for any deployment that outlives a quick test; the check is constant-time and
+  covers `/regis`, `/device` and `/device/{id}`.
 - Registration creates real WARP devices. Clean up unused ones in your Cloudflare WARP account if
   that matters to you.
 
