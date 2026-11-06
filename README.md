@@ -60,7 +60,7 @@ Requirements: a Cloudflare account and Node.js 18+ for the Wrangler CLI.
 | --- | --- |
 | `GET /` | Route index (also reports whether key auth is on). |
 | `GET /regis` | Register a new device, cache it, and return it. |
-| `GET /device` | Return the latest device — raw upstream response by default. |
+| `GET /device` | Return the latest device on this colo. |
 | `GET /device/{deviceId}` | Return a specific cached device. |
 
 Query parameters for `/regis`:
@@ -72,19 +72,15 @@ Query parameters for `/regis`:
 | `mode` | `masque` | `masque` or `wg` (alias `wireguard`). |
 | `format` | `json` | `json`, `raw` (upstream responses only) or `conf` (wg-quick, WireGuard only). |
 
-`/device` accepts `format` too, but defaults to `raw`:
-
-| Param | Default | Description |
-| --- | --- | --- |
-| `format` | `raw` | `raw`, `json` (normalized) or `conf`. |
+`/device` and `/device/{id}` take only `format`, with the same default (`json`).
 
 ```bash
 curl https://<your-worker>.workers.dev/regis
 curl https://<your-worker>.workers.dev/regis?name=phone&ttl=3600
 curl https://<your-worker>.workers.dev/regis?mode=wg            # classic WireGuard
 curl https://<your-worker>.workers.dev/regis?mode=wg&format=conf
-curl https://<your-worker>.workers.dev/device                   # raw upstream response
-curl https://<your-worker>.workers.dev/device?format=json       # normalized
+curl https://<your-worker>.workers.dev/device                   # same compact JSON
+curl https://<your-worker>.workers.dev/device?format=raw        # upstream responses
 curl https://<your-worker>.workers.dev/device?format=conf
 ```
 
@@ -108,9 +104,9 @@ Without `REGIS_KEY` the Worker stays open, which is the default. The comparison 
 
 ## Response
 
-`/regis?format=json` returns the compact nine-field device below. `/device` returns the untouched
-upstream response by default (`{ "register": {...} }`, plus `"enroll"` for MASQUE); add
-`?format=json` for the compact shape or `?format=raw` to make it explicit. Both full upstream
+`/regis` and `/device` both return the compact nine-field device below. Add `?format=raw` for the
+untouched upstream responses (`{ "register": {...} }`, plus `"enroll"` for MASQUE), or
+`?format=conf` for a wg-quick config. Both full upstream
 payloads and a field-by-field diff live in [docs/response-shape.md](docs/response-shape.md).
 
 ```json

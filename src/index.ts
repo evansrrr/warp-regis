@@ -22,7 +22,7 @@ const CORS_HEADERS: Record<string, string> = {
 
 const ROUTES = {
   "GET /regis": "Register a new WARP device. Params: name, ttl, mode=masque|wg, format=json|raw|conf.",
-  "GET /device": "Return the raw upstream response of the latest device. Params: format=json|raw|conf.",
+  "GET /device": "Return the latest device on this colo. Params: format=json|raw|conf.",
   "GET /device/{deviceId}": "Return a specific device registered on this colo.",
 };
 
@@ -199,10 +199,10 @@ export default {
       return handleRegis(url);
     }
 
-    // /device and /device/{id} default to the raw upstream response.
-    const format = parseFormat(url.searchParams.get("format"), "raw");
+    // Both endpoints default to the compact device JSON; raw/conf must be explicit.
+    const format = parseFormat(url.searchParams.get("format"), "json");
     if (!format) {
-      return json({ error: "invalid format", hint: "Use format=raw (default), json, or conf." }, 400);
+      return json({ error: "invalid format", hint: "Use format=json (default), raw, or conf." }, 400);
     }
 
     if (path === "/device") {

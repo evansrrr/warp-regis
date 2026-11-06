@@ -192,8 +192,8 @@ Constant / ignorable for client configuration: `type` (`"a"`), `model` (`"PC"`),
 
 ## Adopted compact shape (A)
 
-Nine fields, connection credentials only. `?format=json` returns exactly this; `?format=raw` is the
-only way to get the upstream bodies.
+Nine fields, connection credentials only. `?format=json` (the default everywhere) returns exactly
+this; `?format=raw` is the only way to get the upstream bodies.
 
 ```json
 {
