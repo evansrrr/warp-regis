@@ -1,3 +1,4 @@
+import { toSummary } from "./device";
 import { readDevice, writeDevice } from "./store";
 import type { RegistrationMode, WarpDevice } from "./types";
 import { registerDevice } from "./warp";
@@ -108,7 +109,7 @@ function render(device: WarpDevice, format: "json" | "raw" | "conf"): Response {
     return text(toWireGuardConfig(device));
   }
 
-  return json(device);
+  return json(toSummary(device));
 }
 
 function parseFormat(raw: string | null, fallback: "json" | "raw"): "json" | "raw" | "conf" | null {

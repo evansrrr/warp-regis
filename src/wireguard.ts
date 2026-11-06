@@ -1,6 +1,5 @@
+import { DEFAULT_ENDPOINT } from "./device";
 import type { WarpDevice } from "./types";
-
-const DEFAULT_ENDPOINT = "engage.cloudflareclient.com:2408";
 
 /**
  * Renders a wg-quick style config for a WireGuard-mode device.

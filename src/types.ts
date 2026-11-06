@@ -1,5 +1,19 @@
 export type RegistrationMode = "masque" | "wireguard";
 
+/** Minimal public shape returned by `?format=json`. Nine fields, no raw payloads. */
+export interface DeviceSummary {
+  mode: RegistrationMode;
+  deviceId: string;
+  token: string;
+  privateKey: string;
+  peerPublicKey: string;
+  ipv4: string;
+  ipv6: string;
+  endpoint: string;
+  clientId: string;
+}
+
+/** Full record kept in the Cache API so `?format=raw` and `?format=conf` still work. */
 export interface WarpDevice {
   /** How the device was enrolled. */
   mode: RegistrationMode;

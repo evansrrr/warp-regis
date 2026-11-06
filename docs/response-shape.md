@@ -190,9 +190,10 @@ Constant / ignorable for client configuration: `type` (`"a"`), `model` (`"PC"`),
 `install_id` / `fcm_token` (empty), `policy.*` (identical every time), `config.services.http_proxy`
 (`172.16.0.1:2480`).
 
-## Candidate compact shapes
+## Adopted compact shape (A)
 
-**A — connection-only (9 fields, both modes identical):**
+Nine fields, connection credentials only. `?format=json` returns exactly this; `?format=raw` is the
+only way to get the upstream bodies.
 
 ```json
 {
@@ -208,27 +209,23 @@ Constant / ignorable for client configuration: `type` (`"a"`), `model` (`"PC"`),
 }
 ```
 
-**B — A + account facts (12 fields):**
+| Compact field | Source (wireguard) | Source (masque) |
+| --- | --- | --- |
+| `mode` | constant `"wireguard"` | constant `"masque"` |
+| `deviceId` | `register.id` | `register.id` = `enroll.id` |
+| `token` | `register.token` | `register.token` (**not** in `enroll`) |
+| `privateKey` | locally generated X25519 scalar | locally generated P-256 key (SEC1 DER) |
+| `peerPublicKey` | `register.config.peers[0].public_key` | `enroll.config.peers[0].public_key`, PEM stripped |
+| `ipv4` | `config.interface.addresses.v4` | `enroll.config.interface.addresses.v4` |
+| `ipv6` | `config.interface.addresses.v6` | `enroll.config.interface.addresses.v6` |
+| `endpoint` | `peers[0].endpoint.host` | `peers[0].endpoint.host` |
+| `clientId` | `config.client_id` | `enroll.config.client_id` |
 
-```json
-{
-  "mode": "wireguard",
-  "deviceId": "<uuid>",
-  "token": "<uuid>",
-  "privateKey": "<b64>",
-  "peerPublicKey": "<b64>",
-  "ipv4": "172.16.0.2",
-  "ipv6": "2606:4700:110:...",
-  "endpoint": "engage.cloudflareclient.com:2408",
-  "clientId": "OapF",
-  "license": "00000000-0000000-00000000",
-  "warpPlus": true,
-  "quotaGb": 0
-}
-```
+Deliberately dropped: `name`, `type`, `model`, `locale`, `place`, `enabled`, `warp_enabled`,
+`waitlist_enabled`, `install_id`, `fcm_token`, `created`, `updated`, `tos`, `policy`,
+`config.services.http_proxy`, `endpoint.v4/v6` (they end in `:0`), `endpoint.ports`, and the whole
+`account` block (`license`, `ttl`, `warp_plus`, `quota`, `usage`). If you need any of them, read
+`?format=raw` or call `GET /reg/{id}` yourself.
 
-**C — B + routing extras:** `httpProxy` (`config.services.http_proxy`), `ports` (endpoint port
-list), `endpointV4` / `endpointV6`, `name`, `registeredAt`.
-
-`raw` can be dropped entirely, attached on demand (`?format=raw`), or kept as a single nested
-object.
+The full record (including `raw`) stays in the Cache API, because `?format=raw` and
+`?format=conf` are rendered from it.

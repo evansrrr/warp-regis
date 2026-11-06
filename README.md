@@ -108,42 +108,40 @@ Without `REGIS_KEY` the Worker stays open, which is the default. The comparison 
 
 ## Response
 
-`/regis` returns the normalized device object by default; `/device` returns the untouched upstream
-response (`{ "register": {...} }`, plus `"enroll"` for MASQUE) unless you ask for
-`?format=json`. Both full payloads, a field-by-field diff and candidate compact shapes live in
-[docs/response-shape.md](docs/response-shape.md).
+`/regis?format=json` returns the compact nine-field device below. `/device` returns the untouched
+upstream response by default (`{ "register": {...} }`, plus `"enroll"` for MASQUE); add
+`?format=json` for the compact shape or `?format=raw` to make it explicit. Both full upstream
+payloads and a field-by-field diff live in [docs/response-shape.md](docs/response-shape.md).
 
 ```json
 {
   "mode": "masque",
   "deviceId": "11111111-1111-4111-8111-111111111111",
   "token": "22222222-2222-4222-8222-222222222222",
-  "name": "warp-regis",
   "privateKey": "MGsCAQEEIJ+HMzsCZSwVKlRVzp3/6GtBCm8j0eDY03mukSfyAy2RoUQDQgAE...",
-  "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...",
   "peerPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r...",
   "ipv4": "172.16.0.2",
   "ipv6": "2606:4700:110:8f8a:81c6:c5fa:f31c:a4f2",
   "endpoint": "engage.cloudflareclient.com:2408",
-  "clientId": "h6xM",
-  "registeredAt": "2026-11-06T18:00:25.758Z",
-  "raw": {
-    "register": { "...": "POST /reg response" },
-    "enroll": { "...": "PATCH /reg/{id} response" }
-  }
+  "clientId": "h6xM"
 }
 ```
+
+Nine fields, connection credentials only — no account block, no timestamps, no upstream bodies.
 
 Field notes:
 
 - `mode` — `masque` or `wireguard`; decides how the keys are encoded.
 - `privateKey` — `masque`: P-256 private key, SEC1 DER, base64. `wireguard`: raw 32-byte clamped
   Curve25519 scalar, base64.
-- `publicKey` — SPKI DER (masque) or raw 32 bytes (wireguard), base64.
 - `peerPublicKey` — base64 DER for masque (PEM armor stripped), raw 32 bytes for wireguard.
-- `endpoint` — `endpoint.host` from the peer config; `endpoint.v4` is frequently reported with
-  port `0`, so the hostname is preferred.
+- `endpoint` — `endpoint.host` from the peer config, falling back to
+  `engage.cloudflareclient.com:2408`; `endpoint.v4` is frequently reported with port `0`.
 - `clientId` — `config.client_id`; some WARP clients want it as the `reserved` field.
+
+The public key matching `privateKey` can be derived if you need it: for WireGuard it is
+`X25519(privateKey, 9)`, for MASQUE it is the SPKI form of the P-256 key. Use `?format=raw` for
+the complete upstream payloads.
 
 ### WireGuard config output
 
