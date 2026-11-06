@@ -1,5 +1,5 @@
 import { configuredKeys, isAuthorized } from "./auth";
-import { DEFAULT_ENDPOINT, toSummary } from "./device";
+import { toSummary } from "./device";
 import { createStore } from "./store";
 import type { Env, RegistrationMode, WarpDevice } from "./types";
 import {
@@ -94,7 +94,10 @@ function parseTtl(raw: string | null, fallback: number): number {
 }
 
 function parseName(raw: string | null): string {
-  const name = (raw ?? "").trim().replace(/[^\w.@-]/g, "-").slice(0, 64);
+  const name = (raw ?? "")
+    .trim()
+    .replace(/[^\w.@-]/g, "-")
+    .slice(0, 64);
   return name || DEFAULT_NAME;
 }
 

@@ -47,6 +47,8 @@ describe("authorization", () => {
   it("rejects missing or wrong keys", () => {
     expect(isAuthorized(request(), BASE, keyed)).toBe(false);
     expect(isAuthorized(request({ Authorization: "Bearer nope" }), BASE, keyed)).toBe(false);
-    expect(isAuthorized(request(), new URL("https://warp.test/device?key=nope"), keyed)).toBe(false);
+    expect(isAuthorized(request(), new URL("https://warp.test/device?key=nope"), keyed)).toBe(
+      false,
+    );
   });
 });

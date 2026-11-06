@@ -82,9 +82,7 @@ async function send(
 
 /** Strips PEM armor (MASQUE peer keys) and any whitespace / line breaks (WireGuard keys). */
 function normalizePeerKey(value: string): string {
-  return value
-    .replace(/-----(BEGIN|END) PUBLIC KEY-----/g, "")
-    .replace(/\s+/g, "");
+  return value.replace(/-----(BEGIN|END) PUBLIC KEY-----/g, "").replace(/\s+/g, "");
 }
 
 /** Combines `endpoint.host` with the advertised port list into a usable `host:port`. */
@@ -95,7 +93,9 @@ function buildEndpoint(
 ): { endpoint: string; ports?: number[] } {
   const port = ports?.[0] ?? DEFAULT_PORTS[mode];
   const hostname = (host ?? "engage.cloudflareclient.com").replace(/:\d+$/, "");
-  return ports?.length ? { endpoint: `${hostname}:${port}`, ports } : { endpoint: `${hostname}:${port}` };
+  return ports?.length
+    ? { endpoint: `${hostname}:${port}`, ports }
+    : { endpoint: `${hostname}:${port}` };
 }
 
 function extractConfig(account: RegisterResponse, mode: RegistrationMode) {
@@ -232,5 +232,8 @@ export async function updateLicense(device: WarpDevice, license: string | null):
   if (license === null) {
     return send("DELETE", `/reg/${device.deviceId}/account`, { token: device.token });
   }
-  return send("PUT", `/reg/${device.deviceId}/account`, { token: device.token, payload: { license } });
+  return send("PUT", `/reg/${device.deviceId}/account`, {
+    token: device.token,
+    payload: { license },
+  });
 }

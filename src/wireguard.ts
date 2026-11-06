@@ -10,7 +10,10 @@ export function toWireGuardConfig(device: WarpDevice): string {
     throw new Error("only WireGuard devices can be rendered as a wg-quick config");
   }
 
-  const addresses = [device.ipv4 ? `${device.ipv4}/32` : "", device.ipv6 ? `${device.ipv6}/128` : ""]
+  const addresses = [
+    device.ipv4 ? `${device.ipv4}/32` : "",
+    device.ipv6 ? `${device.ipv6}/128` : "",
+  ]
     .filter(Boolean)
     .join(", ");
 

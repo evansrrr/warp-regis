@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import type { Env, DeviceSummary } from "../src/types";
-import { DEVICE_ID, DEVICE_TOKEN, WG_PEER_KEY, enrollBody, mockUpstream, registerBody } from "./fixtures";
+import {
+  DEVICE_ID,
+  DEVICE_TOKEN,
+  WG_PEER_KEY,
+  enrollBody,
+  mockUpstream,
+  registerBody,
+} from "./fixtures";
 
 function get(path: string, headers: Record<string, string> = {}): Request {
   return new Request(`https://warp.test${path}`, { headers });
@@ -155,7 +162,10 @@ describe("auth", () => {
   it("accepts either configured key, via header or query", async () => {
     upstreamOk();
     await worker.fetch(get("/regis?mode=wg"), env); // rejected without a key, so nothing is stored
-    const viaHeader = await worker.fetch(get("/regis?mode=wg", { Authorization: "Bearer secret-two" }), env);
+    const viaHeader = await worker.fetch(
+      get("/regis?mode=wg", { Authorization: "Bearer secret-two" }),
+      env,
+    );
     expect(viaHeader.status).toBe(200);
     const viaQuery = await worker.fetch(get("/device?key=secret-one"), env);
     expect(viaQuery.status).toBe(200);

@@ -28,7 +28,9 @@ describe("x25519", () => {
   });
 
   it("derives the RFC 7748 §6.1 public key from the base point", () => {
-    const alicePrivate = fromHex("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a");
+    const alicePrivate = fromHex(
+      "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+    );
     expect(toHex(x25519Base(alicePrivate))).toBe(
       "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
     );

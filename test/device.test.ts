@@ -25,7 +25,18 @@ describe("toSummary", () => {
   it("keeps only the connection fields", () => {
     const summary = toSummary(device());
     expect(Object.keys(summary).sort()).toEqual(
-      ["clientId", "deviceId", "endpoint", "ipv4", "ipv6", "mode", "peerPublicKey", "privateKey", "reserved", "token"].sort(),
+      [
+        "clientId",
+        "deviceId",
+        "endpoint",
+        "ipv4",
+        "ipv6",
+        "mode",
+        "peerPublicKey",
+        "privateKey",
+        "reserved",
+        "token",
+      ].sort(),
     );
     expect(summary).not.toHaveProperty("raw");
     expect(summary).not.toHaveProperty("registeredAt");

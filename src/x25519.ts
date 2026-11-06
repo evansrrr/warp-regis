@@ -87,9 +87,10 @@ export function x25519(scalar: Uint8Array, uPoint: Uint8Array): Uint8Array {
     z2 = (e * ((aa + A24 * e) % P)) % P;
   }
 
+  // Only x2/z2 are read afterwards, so the final conditional swap collapses to this.
   if (swap === 1n) {
-    [x2, x3] = [x3, x2];
-    [z2, z3] = [z3, z2];
+    x2 = x3;
+    z2 = z3;
   }
 
   if (z2 === 0n) return new Uint8Array(32);
