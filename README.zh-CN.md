@@ -5,10 +5,8 @@
 运行在 Cloudflare Workers 上的 [Cloudflare WARP](https://1.1.1.1/) 设备注册器。一次 `GET` 即可拿到可用的
 **MASQUE** 或 **WireGuard** 凭证，无需数据库。
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/USER/warp-regis)
-[![CI](https://github.com/USER/warp-regis/actions/workflows/ci.yml/badge.svg)](https://github.com/USER/warp-regis/actions/workflows/ci.yml)
-
-> 发布前把 `USER` 换成你的 GitHub 用户名（README 与 `package.json` 的 `repository`）。
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/evansrrr/warp-regis)
+[![CI](https://github.com/evansrrr/warp-regis/actions/workflows/ci.yml/badge.svg)](https://github.com/evansrrr/warp-regis/actions/workflows/ci.yml)
 
 ## 快速开始
 

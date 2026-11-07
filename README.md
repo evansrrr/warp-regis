@@ -5,11 +5,8 @@
 A [Cloudflare WARP](https://1.1.1.1/) device registrar that runs on Cloudflare Workers. One `GET`
 returns usable **MASQUE** or **WireGuard** credentials, with no database to provision.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/USER/warp-regis)
-[![CI](https://github.com/USER/warp-regis/actions/workflows/ci.yml/badge.svg)](https://github.com/USER/warp-regis/actions/workflows/ci.yml)
-
-> Replace `USER` with your GitHub handle (and the matching `repository` field in `package.json`)
-> once the repo is public.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/evansrrr/warp-regis)
+[![CI](https://github.com/evansrrr/warp-regis/actions/workflows/ci.yml/badge.svg)](https://github.com/evansrrr/warp-regis/actions/workflows/ci.yml)
 
 ## Quick start
 

@@ -15,7 +15,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/USER/warp-regis.git"
+    "url": "git+https://github.com/evansrrr/warp-regis.git"
   },
   "scripts": {
     "dev": "wrangler dev",
