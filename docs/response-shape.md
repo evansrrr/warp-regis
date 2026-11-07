@@ -35,7 +35,7 @@ The payloads below are verbatim copies with credentials replaced by placeholders
       "referral_count": 0,
       "referral_renewal_countdown": 0,
       "role": "child",
-      "license": "00000000-0000000-00000000",
+      "license": "<warp-plus-license>",
       "ttl": "2027-02-04T18:28:10.630818239Z"
     },
     "config": {
@@ -120,7 +120,7 @@ response is the one that matters:
       "referral_count": 0,
       "referral_renewal_countdown": 0,
       "role": "child",
-      "license": "00000000-0000000-00000000"
+      "license": "<warp-plus-license>"
     },
     "config": {
       "client_id": "fPdw",

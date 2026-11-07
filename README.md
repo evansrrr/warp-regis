@@ -1,5 +1,7 @@
 # warp-regis
 
+**English** | [中文](README.zh-CN.md)
+
 A [Cloudflare WARP](https://1.1.1.1/) device registrar that runs on Cloudflare Workers. One `GET`
 returns usable **MASQUE** or **WireGuard** credentials, with no database to provision.
 
