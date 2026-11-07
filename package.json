@@ -1,6 +1,5 @@
 {
   "name": "warp-regis",
-  "version": "2.0.0",
   "description": "Stateless Cloudflare WARP device registrar for Cloudflare Workers: MASQUE and WireGuard modes, optional KV storage",
   "license": "MIT",
   "type": "module",

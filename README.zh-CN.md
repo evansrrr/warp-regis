@@ -108,8 +108,7 @@ npm run lint
 npm run build    # 单文件产物 dist/worker.js（约 12 KiB，gzip 5 KiB）
 ```
 
-`npm run build` 产出可直接粘贴进控制台的自包含 ES 模块；打 tag 发布时 Release 会自动附带该产物。
-版本历史见 [CHANGELOG.md](CHANGELOG.md)。
+`npm run build` 产出可直接粘贴进控制台的自包含 ES 模块。
 
 ## 许可证
 

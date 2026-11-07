@@ -1,22 +1,20 @@
 #!/usr/bin/env node
 /**
  * Bundles the Worker into a single, self-contained ES module that can be pasted
- * into the Cloudflare dashboard or uploaded as a release asset.
+ * into the Cloudflare dashboard or uploaded anywhere else.
  *
  *   node scripts/build.mjs [--no-minify] [--outfile dist/worker.js]
  *
  * Everything is bundled with esbuild: no runtime imports, no node built-ins,
- * `target: es2022` (the Workers runtime), minified, no source map, no banner
- * noise beyond a one-line version stamp.
+ * `target: es2022` (the Workers runtime), minified, no source map.
  */
 
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { build } from "esbuild";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const pkg = JSON.parse(await readFile(resolve(ROOT, "package.json"), "utf8"));
 
 const args = process.argv.slice(2);
 const minify = !args.includes("--no-minify");
@@ -43,7 +41,7 @@ const result = await build({
   treeShaking: true,
   metafile: true,
   define: { "process.env.NODE_ENV": '"production"' },
-  banner: { js: `/* warp-regis v${pkg.version} — Cloudflare Worker bundle */` },
+  banner: { js: "/* warp-regis — Cloudflare Worker bundle */" },
   logLevel: "warning",
 });
 

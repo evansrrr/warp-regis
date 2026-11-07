@@ -109,8 +109,7 @@ npm run lint
 npm run build    # single-file bundle -> dist/worker.js (~12 KiB, 5 KiB gzip)
 ```
 
-`npm run build` produces a self-contained ES module you can paste into the dashboard; tagged
-releases attach it automatically. See [CHANGELOG.md](CHANGELOG.md) for history.
+`npm run build` produces a self-contained ES module you can paste into the dashboard.
 
 ## License
 
